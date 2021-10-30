@@ -1,0 +1,14 @@
+[Unit]
+Description=Smokey Controller
+After=network.target
+
+[Service]
+User=ff
+Type=simple
+ExecStart=/home/ff/smokey.git/bin/start.sh
+StandardOutput=null
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias=smokey.service
