@@ -53,9 +53,9 @@ type WantedState struct {
 	LightColor          int
 	LightColorName      string
 	LightDim            int
+	LightDimOn          bool
 	LightMode           LightMode
 	LightModeName       string
-	IncreaseDim         bool
 	DiffuserAutoOffSecs int
 	LightAutoOffSecs    int
 	DampenDiffuserTs    time.Time
@@ -92,7 +92,7 @@ func (sc *sCommand) run() {
 	sc.Unlock()
 }
 
-type ManagerState struct {
+type State struct {
 	WantedState     WantedState
 	OperStateParsed OperStateParsed
 	Stats           Stats
@@ -103,7 +103,7 @@ type Manager struct {
 	mqttPub  chan<- mqtt_agent.Msg
 	mqttSub  <-chan mqtt_agent.Msg
 	cmds     chan command
-	state    ManagerState
+	state    State
 }
 
 func (m *Manager) msgParseStatePower1(raw string) {
@@ -231,7 +231,7 @@ func (m *Manager) mainLoop() {
 				m.state.OperStateParsed.LightOn != m.state.WantedState.LightOn {
 				m.cmdPubQueryStatus(nil)
 			}
-			m.bumpIncreaseDim()
+			m.bumpSunshineLightDim()
 		case <-checkStatusTickSlow:
 			m.cmdPubQueryStatus(nil)
 		case cmd = <-m.cmds:
@@ -244,14 +244,14 @@ func (m *Manager) mainLoop() {
 	}
 }
 
-func (m *Manager) bumpIncreaseDim() {
+func (m *Manager) bumpSunshineLightDim() {
 	if !m.state.WantedState.LightOn ||
 		!m.state.OperStateParsed.LightOn ||
 		m.state.WantedState.LightMode != Sunshine {
 		return
 	}
 
-	if m.state.WantedState.LightDim >= 99 {
+	if m.state.WantedState.LightDim >= 100 {
 		// Dim reach limit, change mode to crazy
 		logger.Info("Sunshine mode reached max bright. Switching to Crazy mode")
 		newAutoOffSecs := m.recalculateLightAutoOff()
@@ -299,8 +299,9 @@ func (m *Manager) handleSecondTick() {
 			newAutoOffSecs := m.recalculateLightAutoOff()
 			sameStrColor := LightColor(m.state.WantedState.LightColorName)
 			savedDim := m.state.WantedState.LightDim
+			savedDimOn := m.state.WantedState.LightDimOn
 			m.cmdLightOn(newAutoOffSecs, m.state.WantedState.LightMode, sameStrColor)
-			if m.state.WantedState.LightMode == Sunshine {
+			if savedDimOn {
 				m.cmdLightDim(savedDim)
 			}
 		} else {
@@ -350,7 +351,7 @@ func (m *Manager) cmdDiffuserOff() {
 func (m *Manager) currentState() []byte {
 	result, err := json.Marshal(m.state)
 	if err != nil {
-		logger.Errorf("Unable to encode ManagerState: %+v: %v", m.state, err)
+		logger.Errorf("Unable to encode State: %+v: %v", m.state, err)
 		return nil
 	}
 	m.state.Stats.GetStateHits += 1
@@ -376,6 +377,7 @@ func (m *Manager) cmdLight(on bool, mode LightMode, color LightColor) {
 	if on {
 		msg.Topic, msg.Payload = mqtt_agent.MsgPubSetLightMode(modeInt)
 		m.mqttPub <- msg
+		// color only matters in solid and sunshine modes
 		if mode == Solid || mode == Sunshine {
 			m.cmdLightColor(color)
 		}
@@ -393,7 +395,9 @@ func (m *Manager) cmdLight(on bool, mode LightMode, color LightColor) {
 	m.state.OperStateParsed.LightOnSecs = 0
 	m.state.WantedState.LightMode = mode
 	m.state.WantedState.LightModeName, _ = mode.XlateVal()
-	m.state.WantedState.IncreaseDim = mode == Sunshine
+	// clear dim on every time mode is set. dim will be used only after being
+	// explicitly set (e.g. mode == Sunshine)
+	m.state.WantedState.LightDimOn = false
 	m.state.WantedState.DampenLightTs = time.Now().Add(cmdTsDampenInterval)
 }
 
@@ -418,6 +422,7 @@ func (m *Manager) cmdLightColor(color LightColor) {
 
 func (m *Manager) cmdLightDim(dim int) {
 	m.state.WantedState.LightDim = dim
+	m.state.WantedState.LightDimOn = true
 	var msg mqtt_agent.Msg
 	msg.Topic, msg.Payload = mqtt_agent.MsgPubSetLightDim(dim)
 	m.mqttPub <- msg
