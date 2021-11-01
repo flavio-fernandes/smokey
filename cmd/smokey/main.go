@@ -41,6 +41,7 @@ func main() {
 	passParamPtr := flag.String("pass", MqttConfig.Pass, "mqtt password")
 	topicPrefixParamPtr := flag.String("topic", MqttConfig.TopicPrefix, "mqtt topic device prefix")
 	listenPortPtr := flag.Int("listenport", defaultListenPort, "or use LISTENPORT to override")
+	advertiseStatePtr := flag.Bool("advertise", false, "mqtt publish state of diffuser/light")
 	flag.Parse()
 
 	MqttConfig.ClientId = *clientIdParamPtr
@@ -71,7 +72,7 @@ func main() {
 
 	mqttSubMsgChannel := make(chan mqtt_agent.Msg, 1024)
 	mqttPubMsgChannel := mqtt_agent.Start(&MqttConfig, mqttSubMsgChannel)
-	mgr := manager.Start(mqttPubMsgChannel, mqttSubMsgChannel)
+	mgr := manager.Start(mqttPubMsgChannel, mqttSubMsgChannel, *advertiseStatePtr)
 	web.Start(mgr, fmt.Sprintf("%d", *listenPortPtr))
 
 	for {

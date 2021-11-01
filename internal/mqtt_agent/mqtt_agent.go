@@ -37,13 +37,15 @@ const (
 	DefTopicSubStatus11 = "stat/STATUS11"
 	DefTopicSubState    = "tele/STATE"
 
-	DefTopicPubCheckStatus = "cmnd/Status"
-	DefTopicPubCheckWater  = "cmnd/TuyaSend8"
-	DefTopicPubDiffuser    = "cmnd/Power1"
-	DefTopicPubLight       = "cmnd/Power2"
-	DefTopicPubLightMode   = "cmnd/TuyaEnum2"
-	DefTopicPubLightDim    = "cmnd/Dimmer0"
-	DefTopicPubLightColor  = "cmnd/Color1"
+	DefTopicPubAdvStateLight    = "state/light"
+	DefTopicPubAdvStateDiffuser = "state/diffuser"
+	DefTopicPubCheckStatus      = "cmnd/Status"
+	DefTopicPubCheckWater       = "cmnd/TuyaSend8"
+	DefTopicPubDiffuser         = "cmnd/Power1"
+	DefTopicPubLight            = "cmnd/Power2"
+	DefTopicPubLightMode        = "cmnd/TuyaEnum2"
+	DefTopicPubLightDim         = "cmnd/Dimmer0"
+	DefTopicPubLightColor       = "cmnd/Color1"
 )
 
 func TopicSubPower1() string {
@@ -64,6 +66,21 @@ func TopicSubStatus11() string {
 
 func TopicSubState() string {
 	return gConf.TopicPrefix + DefTopicSubState
+}
+
+func onStr(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
+}
+
+func MsgPubAdvStateLight(on bool) (string, string) {
+	return gConf.TopicPrefix + DefTopicPubAdvStateLight, onStr(on)
+}
+
+func MsgPubAdvStateDiffuser(on bool) (string, string) {
+	return gConf.TopicPrefix + DefTopicPubAdvStateDiffuser, onStr(on)
 }
 
 func MsgPubCheckStatus11() (string, string) {

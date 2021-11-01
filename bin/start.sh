@@ -13,4 +13,4 @@ export PATH=$PATH:/usr/local/go/bin
 ## Important: if we wanted to build do this
 ## pushd ../cmd/smokey && go build && popd
 
-./smokey -debug
+./smokey -advertise -debug

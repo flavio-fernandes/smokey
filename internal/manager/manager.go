@@ -99,11 +99,12 @@ type State struct {
 }
 
 type Manager struct {
-	StopChan chan struct{}
-	mqttPub  chan<- mqtt_agent.Msg
-	mqttSub  <-chan mqtt_agent.Msg
-	cmds     chan command
-	state    State
+	advertiseState bool
+	StopChan       chan struct{}
+	mqttPub        chan<- mqtt_agent.Msg
+	mqttSub        <-chan mqtt_agent.Msg
+	cmds           chan command
+	state          State
 }
 
 func (m *Manager) msgParseStatePower1(raw string) {
@@ -141,6 +142,14 @@ func (m *Manager) msgParseStateCommon(o *OperState, raw string) {
 	m.state.OperStateParsed.Heap = o.Heap
 	m.state.OperStateParsed.Raw = raw
 	m.state.OperStateParsed.LastReceiveTs = ts()
+
+	if m.advertiseState {
+		var msg mqtt_agent.Msg
+		msg.Topic, msg.Payload = mqtt_agent.MsgPubAdvStateDiffuser(m.state.OperStateParsed.DiffuserOn)
+		m.mqttPub <- msg
+		msg.Topic, msg.Payload = mqtt_agent.MsgPubAdvStateLight(m.state.OperStateParsed.LightOn)
+		m.mqttPub <- msg
+	}
 
 	m.state.Stats.ParseStateMsgs += 1
 }
@@ -446,12 +455,13 @@ func (m *Manager) cmdPubQueryStatus(msg *mqtt_agent.Msg) {
 	m.state.Stats.PubQueryStatus += 1
 }
 
-func Start(mqttPub chan<- mqtt_agent.Msg, mqttSub <-chan mqtt_agent.Msg) *Manager {
+func Start(mqttPub chan<- mqtt_agent.Msg, mqttSub <-chan mqtt_agent.Msg, advertiseState bool) *Manager {
 	mgr := Manager{
-		StopChan: make(chan struct{}),
-		mqttPub:  mqttPub,
-		mqttSub:  mqttSub,
-		cmds:     make(chan command, 1),
+		advertiseState: advertiseState,
+		StopChan:       make(chan struct{}),
+		mqttPub:        mqttPub,
+		mqttSub:        mqttSub,
+		cmds:           make(chan command, 1),
 	}
 	go mgr.mainLoop()
 	return &mgr
